@@ -1,0 +1,78 @@
+name: Release extra apps pack
+
+on:
+  push:
+    tags:
+      - "pack-*"
+
+permissions:
+  contents: write
+
+env:
+  FBT_NO_SYNC: 0
+  FORCE_NO_DIRTY: "yes"
+  FBT_GIT_SUBMODULE_SHALLOW: 0
+  FIRMWARE_REF: main
+  UPSTREAM_REF: dev
+
+jobs:
+  release:
+    name: Release extra FAPs
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Checkout firmware
+        uses: actions/checkout@v7
+        with:
+          repository: thedoctorz/doctor-firmware
+          ref: ${{ env.FIRMWARE_REF }}
+          path: firmware
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Submodules
+        working-directory: firmware
+        run: git submodule update --init --recursive
+
+      - name: Protobuf tags
+        working-directory: firmware/assets/protobuf
+        run: |
+          git -c http.https://github.com/.extraheader= fetch --tags --force origin
+          git describe --tags --abbrev=0
+
+      - name: Clone all-the-plugins
+        run: git clone --depth 1 --branch "${UPSTREAM_REF}" https://github.com/xMasterX/all-the-plugins.git upstream
+
+      - name: Cache fbt toolchain
+        uses: actions/cache@v6
+        with:
+          path: firmware/toolchain
+          key: fbt-toolchain-${{ runner.os }}-${{ hashFiles('firmware/fbt_options.py', 'firmware/scripts/toolchain/**') }}
+          restore-keys: |
+            fbt-toolchain-${{ runner.os }}-
+
+      - name: Fetch compatible apps
+        run: |
+          python3 scripts/fetch_apps.py --upstream upstream --firmware firmware --report extra_pack_build/fetch-report.json
+          sh scripts/strip_name_tags.sh firmware/applications_user
+
+      - name: Compile FAPs
+        run: python3 scripts/build_pack.py --firmware firmware --out extra_pack_build --fetch-report extra_pack_build/fetch-report.json
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            all-the-apps-extra.tgz
+            all-the-apps-extra.zip
+            extra_pack_build/build-report.md
+          generate_release_notes: true
+          body: |
+            Extra apps for [The Doctor's Firmware](https://github.com/thedoctorz/doctor-firmware).
+
+            Copy `extra_pack_build/artifacts-extra/` onto the SD card `apps/` folder, or flash the firmware `e` package.

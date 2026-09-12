@@ -1,0 +1,89 @@
+name: Extra apps pack
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      firmware_ref:
+        description: Firmware git ref
+        default: main
+      upstream_ref:
+        description: all-the-plugins git ref
+        default: dev
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FBT_NO_SYNC: 0
+  FORCE_NO_DIRTY: "yes"
+  FBT_GIT_SUBMODULE_SHALLOW: 0
+  FIRMWARE_REF: ${{ github.event.inputs.firmware_ref || 'main' }}
+  UPSTREAM_REF: ${{ github.event.inputs.upstream_ref || 'dev' }}
+
+jobs:
+  pack:
+    name: Build extra FAPs
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Checkout firmware
+        uses: actions/checkout@v7
+        with:
+          repository: thedoctorz/doctor-firmware
+          ref: ${{ env.FIRMWARE_REF }}
+          path: firmware
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Submodules
+        working-directory: firmware
+        run: git submodule update --init --recursive
+
+      - name: Protobuf tags
+        working-directory: firmware/assets/protobuf
+        run: |
+          git -c http.https://github.com/.extraheader= fetch --tags --force origin
+          git describe --tags --abbrev=0
+
+      - name: Clone all-the-plugins
+        run: git clone --depth 1 --branch "${UPSTREAM_REF}" https://github.com/xMasterX/all-the-plugins.git upstream
+
+      - name: Cache fbt toolchain
+        uses: actions/cache@v6
+        with:
+          path: firmware/toolchain
+          key: fbt-toolchain-${{ runner.os }}-${{ hashFiles('firmware/fbt_options.py', 'firmware/scripts/toolchain/**') }}
+          restore-keys: |
+            fbt-toolchain-${{ runner.os }}-
+
+      - name: Fetch compatible apps
+        run: |
+          python3 scripts/fetch_apps.py --upstream upstream --firmware firmware --report extra_pack_build/fetch-report.json
+          sh scripts/strip_name_tags.sh firmware/applications_user
+
+      - name: Compile FAPs
+        run: python3 scripts/build_pack.py --firmware firmware --out extra_pack_build --fetch-report extra_pack_build/fetch-report.json
+
+      - name: Upload pack artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: doctor-extra-apps-${{ github.sha }}
+          path: |
+            all-the-apps-extra.tgz
+            all-the-apps-extra.zip
+            extra_pack_build/build-report.md
+            extra_pack_build/build-report.json
+          retention-days: 14
+          if-no-files-found: error
