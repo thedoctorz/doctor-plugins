@@ -12,7 +12,7 @@ env:
   FBT_NO_SYNC: 0
   FORCE_NO_DIRTY: "yes"
   FBT_GIT_SUBMODULE_SHALLOW: 0
-  FIRMWARE_REF: main
+  FIRMWARE_REF: dev
   UPSTREAM_REF: dev
 
 jobs:
@@ -33,7 +33,6 @@ jobs:
           submodules: false
           fetch-depth: 0
           persist-credentials: false
-          token: ${{ secrets.GH_PAT }}
 
       - name: Submodules
         working-directory: firmware

@@ -8,7 +8,7 @@ on:
     inputs:
       firmware_ref:
         description: Firmware git ref
-        default: main
+        default: dev
       upstream_ref:
         description: all-the-plugins git ref
         default: dev
@@ -24,7 +24,7 @@ env:
   FBT_NO_SYNC: 0
   FORCE_NO_DIRTY: "yes"
   FBT_GIT_SUBMODULE_SHALLOW: 0
-  FIRMWARE_REF: ${{ github.event.inputs.firmware_ref || 'main' }}
+  FIRMWARE_REF: ${{ github.event.inputs.firmware_ref || 'dev' }}
   UPSTREAM_REF: ${{ github.event.inputs.upstream_ref || 'dev' }}
 
 jobs:
@@ -45,7 +45,6 @@ jobs:
           submodules: false
           fetch-depth: 0
           persist-credentials: false
-          token: ${{ secrets.GH_PAT }}
 
       - name: Submodules
         working-directory: firmware
