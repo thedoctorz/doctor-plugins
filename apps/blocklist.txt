@@ -12,8 +12,6 @@ mass_storage
 mod_analyzer
 nfc_sniffer
 nice_o_code
-proto_pirate
-protopirate
 secplus_pin
 spectrum_analyzer
 sub_analyzer
